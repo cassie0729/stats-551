@@ -1,0 +1,111 @@
+---
+title: "STATS551_Finalproject"
+author: "Aishwarya Joshi"
+date: '2022-04-15'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+install.packages("bayesplot")
+```
+
+
+```{r}
+library(dplyr)
+library(rstan)
+library(here)
+library(bayesplot)
+```
+
+
+```{r}
+#Reading data
+train <- read.csv("train.csv")
+features <- read.csv("features.csv")
+stores <- read.csv("stores.csv")
+```
+
+```{r}
+#merging data
+df <- merge(train, features, by = c("Store", "Date"), all.x = TRUE)
+df <- merge(df, stores, by="Store", all.x=TRUE)
+colnames(df)
+```
+
+```{r}
+nrow(df)
+
+
+
+```
+
+```{r}
+# library(dplyr)
+sample_data<- df %>% group_by(Store) %>% slice_sample(n=200)
+summary(sample_data)
+X <- sample_data %>% select(c("IsHoliday.x","Temperature","Fuel_Price","CPI","Unemployment"))
+
+X <- as.matrix(X[,2:6])
+X <- scale(X, center = TRUE, scale = TRUE)
+Z <- stores %>% select(c("Type","Size"))
+
+
+```
+
+```{r}
+# Specify data.
+data <- list(
+  N = nrow(sample_data),     # Number of observations.
+  K = 45,     # Number of groups.
+  I = 5,     # Number of observation-level covariates.
+  J = 2,     # Number of population-level covariates.
+  y = as.vector(sample_data$Weekly_Sales), # Vector of observations.
+  g = as.vector(sample_data$Store),     # Vector of group assignments.
+  X = X,     # Matrix of observation-level covariates.
+  Z = Z      # Matrix of population-level covariates.
+)
+
+options(mc.cores=4)
+
+# model <- stan_model('hierarchical_regression_02.stan')
+
+# rm(fit2)
+
+# fit <- sampling(model, data, iter=1, chains=4)
+
+# Calibrate the model.
+fit <- stan(
+  file = "hierarchical_regression_02.stan",
+  data = data,
+  control = list(adapt_delta = 0.99),
+  seed = 42
+)
+
+parallel::detectCores()
+
+```
+
+
+```{r}
+install.packages(
+"https://win-builder.r-project.org/5yFs1HoUI204/StanHeaders_2.21.0-6.zip",
+repos = NULL, type = "win.binary"
+)
+```
+
+```{r}
+# Check trace plots.
+install.packages("bayesplot")
+fit %>%
+  mcmc_trace(
+    pars = c("mu", "tau", str_c("beta[", 1:data$K, "]"), "sigma"),
+    n_warmup = 500,
+    facet_args = list(nrow = 5, labeller = label_parsed)
+  )
+```
+
